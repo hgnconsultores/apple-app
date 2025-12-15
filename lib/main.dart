@@ -75,7 +75,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           },
         ),
       )
-      ..loadRequest(Uri.parse('https://www.hgnconsultores.com/herramientas/A1/'));
+      ..loadRequest(Uri.parse('https://www.hgnconsultores.com/app/index.php'));
   }
 
   @override
