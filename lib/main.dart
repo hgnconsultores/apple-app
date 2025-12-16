@@ -12,9 +12,9 @@ class HGNWebViewApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'HGN Consultores',
+      // Mantener esto en false es buena práctica para producción
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // Mantener la paleta por defecto o puedes definir una más simple
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
@@ -34,9 +34,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
   String? _errorMessage;
-  // Variables para controlar la navegación
-  bool _canGoBack = false;
-  bool _canGoForward = false;
 
   @override
   void initState() {
@@ -47,11 +44,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void _initializeWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      // Asegurar que el fondo sea transparente
       ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (int progress) {
-            // No hacer setState en cada progreso, solo cuando llega al 100%
             if (progress == 100) {
               setState(() {
                 _isLoading = false;
@@ -62,95 +59,44 @@ class _WebViewScreenState extends State<WebViewScreen> {
             setState(() {
               _isLoading = true;
               _errorMessage = null;
-              // No actualizamos canGoBack/Forward aquí, esperamos a onPageFinished
             });
           },
-          onPageFinished: (String url) async {
-            // Al finalizar la carga, actualizamos el estado de carga y navegación
+          onPageFinished: (String url) {
             setState(() {
               _isLoading = false;
             });
-            _updateNavigationState();
           },
           onWebResourceError: (WebResourceError error) {
             setState(() {
-              // Filtrar errores comunes o de recursos menores que no son críticos
+              // Solo mostrar error si afecta el marco principal
               if (error.isForMainFrame ?? true) {
                 _errorMessage = 'Error al cargar la página: ${error.description}';
                 _isLoading = false;
               }
             });
-            _updateNavigationState();
           },
           onNavigationRequest: (NavigationRequest request) {
-            // Permitir toda la navegación por defecto
             return NavigationDecision.navigate;
           },
         ),
       )
+      // Cargar la URL
       ..loadRequest(Uri.parse('https://www.hgnconsultores.com/app/index.php'));
-  }
-
-  // Función para obtener el estado actual de la navegación
-  void _updateNavigationState() async {
-    final canGoBack = await _controller.canGoBack();
-    final canGoForward = await _controller.canGoForward();
-
-    if (_canGoBack != canGoBack || _canGoForward != canGoForward) {
-      setState(() {
-        _canGoBack = canGoBack;
-        _canGoForward = canGoForward;
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // Fondo de la cabecera blanco
-        backgroundColor: Colors.white,
-        // Eliminamos el título por defecto
-        title: const Text(''),
-        // Sombra suave o sin elevación para un aspecto limpio de navegador
-        elevation: 1.0, 
-        actions: [
-          // Botón para Retroceder
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: _canGoBack
-                ? () {
-                    _controller.goBack();
-                    // No es estrictamente necesario, pero ayuda a la inmediatez visual
-                    _updateNavigationState(); 
-                  }
-                : null, // Deshabilitado si no puede retroceder
-            tooltip: 'Volver',
-          ),
-          // Botón para Ir Adelante
-          IconButton(
-            icon: const Icon(Icons.arrow_forward),
-            onPressed: _canGoForward
-                ? () {
-                    _controller.goForward();
-                    // No es estrictamente necesario, pero ayuda a la inmediatez visual
-                    _updateNavigationState();
-                  }
-                : null, // Deshabilitado si no puede ir adelante
-            tooltip: 'Adelante',
-          ),
-          // Botón para Recargar
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _controller.reload();
-            },
-            tooltip: 'Recargar',
-          ),
-        ],
-      ),
+      // Se elimina el 'AppBar' completamente.
+      // appBar: null, // o simplemente no se incluye
+      
       body: Stack(
         children: [
+          // 1. Mostrar la WebView (si no hay error)
+          if (_errorMessage == null)
+            WebViewWidget(controller: _controller),
+          
+          // 2. Mostrar el mensaje de error (si existe)
           if (_errorMessage != null)
             Center(
               child: Column(
@@ -171,19 +117,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // En modo de pantalla completa, la única forma de reintentar es con un botón
                   ElevatedButton.icon(
                     onPressed: () {
-                      _controller.reload();
+                      // Usar initState o reload para intentar cargar de nuevo
+                      _controller.reload(); 
+                      setState(() {
+                         _errorMessage = null; // Limpiar error para mostrar loader
+                         _isLoading = true;
+                      });
                     },
                     icon: const Icon(Icons.refresh),
                     label: const Text('Reintentar'),
                   ),
                 ],
               ),
-            )
-          else
-            WebViewWidget(controller: _controller),
-          if (_isLoading)
+            ),
+
+          // 3. Mostrar el indicador de carga (si está cargando Y no hay un error persistente)
+          if (_isLoading && _errorMessage == null)
             const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
