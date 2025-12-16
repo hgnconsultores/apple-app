@@ -14,6 +14,7 @@ class HGNWebViewApp extends StatelessWidget {
       title: 'HGN Consultores',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        // Mantener la paleta por defecto o puedes definir una más simple
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
@@ -33,6 +34,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
   String? _errorMessage;
+  // Variables para controlar la navegación
+  bool _canGoBack = false;
+  bool _canGoForward = false;
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (int progress) {
+            // No hacer setState en cada progreso, solo cuando llega al 100%
             if (progress == 100) {
               setState(() {
                 _isLoading = false;
@@ -57,20 +62,28 @@ class _WebViewScreenState extends State<WebViewScreen> {
             setState(() {
               _isLoading = true;
               _errorMessage = null;
+              // No actualizamos canGoBack/Forward aquí, esperamos a onPageFinished
             });
           },
-          onPageFinished: (String url) {
+          onPageFinished: (String url) async {
+            // Al finalizar la carga, actualizamos el estado de carga y navegación
             setState(() {
               _isLoading = false;
             });
+            _updateNavigationState();
           },
           onWebResourceError: (WebResourceError error) {
             setState(() {
-              _errorMessage = 'Error al cargar la página: ${error.description}';
-              _isLoading = false;
+              // Filtrar errores comunes o de recursos menores que no son críticos
+              if (error.isForMainFrame ?? true) {
+                _errorMessage = 'Error al cargar la página: ${error.description}';
+                _isLoading = false;
+              }
             });
+            _updateNavigationState();
           },
           onNavigationRequest: (NavigationRequest request) {
+            // Permitir toda la navegación por defecto
             return NavigationDecision.navigate;
           },
         ),
@@ -78,13 +91,55 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..loadRequest(Uri.parse('https://www.hgnconsultores.com/app/index.php'));
   }
 
+  // Función para obtener el estado actual de la navegación
+  void _updateNavigationState() async {
+    final canGoBack = await _controller.canGoBack();
+    final canGoForward = await _controller.canGoForward();
+
+    if (_canGoBack != canGoBack || _canGoForward != canGoForward) {
+      setState(() {
+        _canGoBack = canGoBack;
+        _canGoForward = canGoForward;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HGN Consultores - Herramientas A1'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        // Fondo de la cabecera blanco
+        backgroundColor: Colors.white,
+        // Eliminamos el título por defecto
+        title: const Text(''),
+        // Sombra suave o sin elevación para un aspecto limpio de navegador
+        elevation: 1.0, 
         actions: [
+          // Botón para Retroceder
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _canGoBack
+                ? () {
+                    _controller.goBack();
+                    // No es estrictamente necesario, pero ayuda a la inmediatez visual
+                    _updateNavigationState(); 
+                  }
+                : null, // Deshabilitado si no puede retroceder
+            tooltip: 'Volver',
+          ),
+          // Botón para Ir Adelante
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: _canGoForward
+                ? () {
+                    _controller.goForward();
+                    // No es estrictamente necesario, pero ayuda a la inmediatez visual
+                    _updateNavigationState();
+                  }
+                : null, // Deshabilitado si no puede ir adelante
+            tooltip: 'Adelante',
+          ),
+          // Botón para Recargar
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
